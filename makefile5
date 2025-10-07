@@ -1,0 +1,116 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct {
+    int r, g, b;
+} Pixel;
+
+typedef struct {
+    int width, height, max_val;
+    Pixel **pixels;
+} Image;
+
+// Lecture d'une image PPM (format P3)
+Image *readPPM(const char *filename) {
+    FILE *f = fopen(filename, "r");
+    if (!f) {
+        perror("Erreur d'ouverture du fichier");
+        exit(EXIT_FAILURE);
+    }
+
+    Image *img = malloc(sizeof(Image));
+    char format[3];
+    fscanf(f, "%2s", format);
+    if (strcmp(format, "P3") != 0) {
+        fprintf(stderr, "Format non supporté (doit être P3)\n");
+        exit(EXIT_FAILURE);
+    }
+
+    fscanf(f, "%d %d %d", &img->width, &img->height, &img->max_val);
+
+    img->pixels = malloc(img->height * sizeof(Pixel *));
+    for (int i = 0; i < img->height; i++) {
+        img->pixels[i] = malloc(img->width * sizeof(Pixel));
+        for (int j = 0; j < img->width; j++) {
+            fscanf(f, "%d %d %d", &img->pixels[i][j].r, &img->pixels[i][j].g, &img->pixels[i][j].b);
+        }
+    }
+
+    fclose(f);
+    return img;
+}
+
+// Écriture d'une image PPM
+void writePPM(const char *filename, Image *img) {
+    FILE *f = fopen(filename, "w");
+    if (!f) {
+        perror("Erreur d'écriture du fichier");
+        exit(EXIT_FAILURE);
+    }
+
+    fprintf(f, "P3\n%d %d\n%d\n", img->width, img->height, img->max_val);
+    for (int i = 0; i < img->height; i++) {
+        for (int j = 0; j < img->width; j++) {
+            fprintf(f, "%d %d %d ", img->pixels[i][j].r, img->pixels[i][j].g, img->pixels[i][j].b);
+        }
+        fprintf(f, "\n");
+    }
+
+    fclose(f);
+}
+
+// Fonction de découpage
+Image *cutImage(Image *src, int l1, int l2, int c1, int c2) {
+    if (l1 < 0 || l2 > src->height || c1 < 0 || c2 > src->width || l1 >= l2 || c1 >= c2) {
+        fprintf(stderr, "Coordonnées invalides\n");
+        exit(EXIT_FAILURE);
+    }
+
+    Image *cut = malloc(sizeof(Image));
+    cut->width = c2 - c1;
+    cut->height = l2 - l1;
+    cut->max_val = src->max_val;
+
+    cut->pixels = malloc(cut->height * sizeof(Pixel *));
+    for (int i = 0; i < cut->height; i++) {
+        cut->pixels[i] = malloc(cut->width * sizeof(Pixel));
+        for (int j = 0; j < cut->width; j++) {
+            cut->pixels[i][j] = src->pixels[l1 + i][c1 + j];
+        }
+    }
+
+    return cut;
+}
+
+// Libération mémoire
+void freeImage(Image *img) {
+    for (int i = 0; i < img->height; i++)
+        free(img->pixels[i]);
+    free(img->pixels);
+    free(img);
+}
+
+// Commande principale
+int main(int argc, char *argv[]) {
+    if (argc != 7) {
+        printf("Usage : cut fichier.ppm l1 l2 c1 c2 fichier_resultat.ppm\n");
+        return 1;
+    }
+
+    char *input = argv[1];
+    int l1 = atoi(argv[2]);
+    int l2 = atoi(argv[3]);
+    int c1 = atoi(argv[4]);
+    int c2 = atoi(argv[5]);
+    char *output = argv[6];
+
+    Image *img = readPPM(input);
+    Image *cropped = cutImage(img, l1, l2, c1, c2);
+    writePPM(output, cropped);
+
+    freeImage(img);
+    freeImage(cropped);
+
+    printf("Découpage terminé : %s\n", output);
+    return 0;
+}
